@@ -7,6 +7,8 @@ import { connectorRuntime } from '../services/connector-runtime.service';
 import { conversationRepository } from '../repositories/conversation.repository';
 import { connectorRepository } from '../repositories/connector.repository';
 import { costTracker } from '../services/cost-tracker.service';
+import { assistantRepository } from '../repositories/assistant.repository';
+import { promptRuntimeRepository } from '../repositories/prompt.repository';
 
 const MAX_TOOL_ROUNDS = 5;
 
@@ -16,7 +18,16 @@ const processMessageHandler = async (event: APIGatewayProxyEvent): Promise<APIGa
     if (!conversationId) return badRequest('conversationId is required');
 
     const body = JSON.parse(event.body || '{}');
-    const { message, assistantId, tenantId } = body;
+    const { message, assistantId, tenantId, promptVariables } = body as {
+      message?: string;
+      assistantId?: string;
+      tenantId?: string;
+      promptVariables?: Record<string, string>;
+      knowledgeBaseId?: string;
+      systemPrompt?: string;
+      modelId?: string;
+      inferenceConfig?: { maxTokens: number; temperature: number };
+    };
 
     if (!message || !assistantId) {
       return badRequest('message and assistantId are required');
@@ -42,11 +53,38 @@ const processMessageHandler = async (event: APIGatewayProxyEvent): Promise<APIGa
       content: [{ text: msg.content }],
     }));
 
-    // Load assistant config (from the conversation's stored reference)
-    // In a real setup, this would fetch from DynamoDB
-    const systemPrompt = body.systemPrompt || conversation.sessionVars?.systemPrompt || 'You are a helpful assistant.';
-    const modelId = body.modelId || 'anthropic.claude-3-haiku-20240307-v1:0';
-    const inferenceConfig = body.inferenceConfig || { maxTokens: 4096, temperature: 0.7 };
+    // Load assistant configuration from DynamoDB
+    const assistant = await assistantRepository.getById(assistantId);
+    if (!assistant) {
+      return notFound('Assistant not found');
+    }
+
+    // Resolve the base system prompt and model/inference config from assistant
+    const baseSystemPrompt = assistant.systemPrompt || 'You are a helpful assistant.';
+    const modelId = body.modelId || assistant.modelId || 'anthropic.claude-3-haiku-20240307-v1:0';
+    const inferenceConfig = body.inferenceConfig || assistant.inferenceConfig || {
+      maxTokens: 4096,
+      temperature: 0.7,
+      topP: 0.9,
+    };
+
+    // Resolve variables for prompts: conversation sessionVars + optional request overrides
+    const templateVars: Record<string, string> = {
+      ...(conversation.sessionVars || {}),
+      ...(promptVariables || {}),
+    };
+
+    const resolveTemplate = (template: string, vars: Record<string, string>): string =>
+      template.replace(/\{\{(\w+)\}\}/g, (_match, key) => (key in vars ? vars[key] : `{{${key}}}`));
+
+    // Load active prompt (if any) for this assistant and build the final system prompt
+    const activePrompt = await promptRuntimeRepository.getActiveForAssistant(assistantId);
+    let systemPrompt = baseSystemPrompt;
+
+    if (activePrompt) {
+      const resolvedPromptContent = resolveTemplate(activePrompt.content, templateVars);
+      systemPrompt = `${baseSystemPrompt}\n\n${resolvedPromptContent}`;
+    }
 
     // Load enabled connectors and build tool config
     const connectors = await connectorRepository.getEnabledByAssistant(assistantId);

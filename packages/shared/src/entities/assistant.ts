@@ -15,6 +15,7 @@ export interface IAssistant {
   knowledgeBaseEnabled: boolean;
   knowledgeBaseId?: string;
   whatsappPhoneNumber?: string;
+   activeFlowId?: string | null;
   status: 'draft' | 'active' | 'paused';
   createdAt: string;
   updatedAt: string;
