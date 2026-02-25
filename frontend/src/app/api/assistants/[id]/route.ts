@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getAuthHeaders } from '@/lib/api-helpers';
+import { getAuthHeaders, logBFF } from '@/lib/api-helpers';
 
 const API_BASE_URL = process.env.ASSISTANT_API_URL || process.env.API_BASE_URL || 'http://localhost:3001';
 
@@ -10,8 +10,10 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     const response = await fetch(`${API_BASE_URL}/v1/assistants/${id}`, { headers });
     const data = await response.json();
     if (!response.ok) {
+      logBFF('GET', `/api/assistants/${id}`, response.status, response.status);
       return NextResponse.json({ error: data.message || 'Failed to fetch assistant' }, { status: response.status });
     }
+    logBFF('GET', `/api/assistants/${id}`, 200, response.status);
     return NextResponse.json(data);
   } catch (error) {
     console.error('Get assistant BFF error:', error);
@@ -31,8 +33,10 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     });
     const data = await response.json();
     if (!response.ok) {
+      logBFF('PUT', `/api/assistants/${id}`, response.status, response.status);
       return NextResponse.json({ error: data.message || 'Failed to update assistant' }, { status: response.status });
     }
+    logBFF('PUT', `/api/assistants/${id}`, 200, response.status);
     return NextResponse.json(data);
   } catch (error) {
     console.error('Update assistant BFF error:', error);
@@ -47,8 +51,10 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
     const response = await fetch(`${API_BASE_URL}/v1/assistants/${id}`, { method: 'DELETE', headers });
     if (!response.ok) {
       const data = await response.json();
+      logBFF('DELETE', `/api/assistants/${id}`, response.status, response.status);
       return NextResponse.json({ error: data.message || 'Failed to delete assistant' }, { status: response.status });
     }
+    logBFF('DELETE', `/api/assistants/${id}`, 200, response.status);
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error('Delete assistant BFF error:', error);

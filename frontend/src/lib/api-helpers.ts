@@ -1,6 +1,22 @@
 import { NextRequest } from 'next/server';
 
 /**
+ * Log BFF request/response in dev so you can confirm API calls in the terminal.
+ * Example: [BFF] POST /api/auth/login -> 200 (backend: 200)
+ */
+export function logBFF(
+  method: string,
+  path: string,
+  status: number,
+  backendStatus?: number,
+): void {
+  if (process.env.NODE_ENV === 'development') {
+    const extra = backendStatus !== undefined ? ` (backend: ${backendStatus})` : '';
+    console.log(`[BFF] ${method} ${path} -> ${status}${extra}`);
+  }
+}
+
+/**
  * Extract auth headers from the incoming request cookies
  * and forward them to the backend API.
  */

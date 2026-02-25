@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getAuthHeaders } from '@/lib/api-helpers';
+import { getAuthHeaders, logBFF } from '@/lib/api-helpers';
 
 const API_BASE_URL = process.env.CONVERSATION_API_URL || process.env.API_BASE_URL || 'http://localhost:3001';
 
@@ -23,12 +23,14 @@ export async function POST(request: NextRequest) {
       });
       const startData = await startRes.json();
       if (!startRes.ok) {
+        logBFF('POST', '/api/conversations/test', startRes.status, startRes.status);
         return NextResponse.json(
           { error: startData.message || 'Failed to start conversation' },
           { status: startRes.status },
         );
       }
       conversationId = startData.conversationId;
+      logBFF('POST', '/api/conversations/test (startConversation)', 201, startRes.status);
     }
 
     // Step 2: send the message
@@ -39,12 +41,14 @@ export async function POST(request: NextRequest) {
     });
     const msgData = await msgRes.json();
     if (!msgRes.ok) {
+      logBFF('POST', '/api/conversations/test (processMessage)', msgRes.status, msgRes.status);
       return NextResponse.json(
         { error: msgData.message || 'Failed to process message' },
         { status: msgRes.status },
       );
     }
 
+    logBFF('POST', '/api/conversations/test (processMessage)', 200, msgRes.status);
     return NextResponse.json({ conversationId, response: msgData.response, toolCalls: msgData.toolCalls });
   } catch (error) {
     console.error('Test conversation BFF error:', error);

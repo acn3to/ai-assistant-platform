@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getAuthHeaders } from '@/lib/api-helpers';
+import { getAuthHeaders, logBFF } from '@/lib/api-helpers';
 
 const API_BASE_URL = process.env.CONVERSATION_API_URL || process.env.API_BASE_URL || 'http://localhost:3001';
 
@@ -18,12 +18,14 @@ export async function GET(request: NextRequest) {
     const data = await response.json();
 
     if (!response.ok) {
+      logBFF('GET', '/api/conversations', response.status, response.status);
       return NextResponse.json(
         { error: data.message || 'Failed to fetch conversations' },
         { status: response.status },
       );
     }
 
+    logBFF('GET', '/api/conversations', 200, response.status);
     return NextResponse.json(data);
   } catch (error) {
     console.error('Conversations BFF error:', error);

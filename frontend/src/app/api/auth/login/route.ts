@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { logBFF } from '@/lib/api-helpers';
 
 const API_BASE_URL = process.env.AUTH_API_URL || process.env.API_BASE_URL || 'http://localhost:3001';
 
@@ -15,11 +16,14 @@ export async function POST(request: NextRequest) {
     const data = await response.json();
 
     if (!response.ok) {
+      logBFF('POST', '/api/auth/login', response.status, response.status);
       return NextResponse.json(
         { error: data.message || 'Login failed' },
         { status: response.status },
       );
     }
+
+    logBFF('POST', '/api/auth/login', 200, response.status);
 
     // Set tokens in httpOnly cookies for security
     const res = NextResponse.json({ user: data.user });
