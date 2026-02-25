@@ -1,0 +1,198 @@
+service: ai-platform-data-connectors
+frameworkVersion: '>=3.34.0'
+
+package:
+  patterns:
+    - '!node_modules/@aws-sdk/**'
+    - '!node_modules/**/@aws-sdk/**'
+  excludeDevDependencies: true
+  individually: true
+
+useDotenv: true
+
+provider:
+  name: aws
+  runtime: nodejs20.x
+  architecture: arm64
+  memorySize: 256
+  timeout: 30
+  versionFunctions: false
+  deploymentPrefix: serverless
+  stage: ${opt:stage, 'dev'}
+  region: ${opt:region, 'us-east-1'}
+
+  stackTags:
+    Environment: ${self:provider.stage}
+    Project: ai-assistant-platform
+    CostCenter: ai-platform
+
+  environment:
+    STAGE: ${self:provider.stage}
+    REGION: ${self:provider.region}
+    TABLE_NAME: ${self:custom.tableName}
+    ACCESS_CONTROL_ALLOW_ORIGIN: '*'
+    SERVICE_NAME: ${self:service}
+
+  iam:
+    role:
+      statements:
+        - Effect: Allow
+          Action:
+            - dynamodb:GetItem
+            - dynamodb:PutItem
+            - dynamodb:UpdateItem
+            - dynamodb:DeleteItem
+            - dynamodb:Query
+          Resource:
+            - arn:aws:dynamodb:${self:provider.region}:*:table/${self:custom.tableName}
+            - arn:aws:dynamodb:${self:provider.region}:*:table/${self:custom.tableName}/index/*
+        - Effect: Allow
+          Action:
+            - kms:Encrypt
+            - kms:Decrypt
+          Resource: '*'
+
+functions:
+  createConnector:
+    handler: src/handlers/connector-crud.createConnector
+    description: Create a new data connector
+    events:
+      - http:
+          path: /v1/assistants/{assistantId}/connectors
+          method: post
+          cors: true
+          authorizer:
+            name: cognitoAuthorizer
+            arn: ${self:custom.authorizerArn}
+            resultTtlInSeconds: 300
+            identitySource: method.request.header.Authorization
+            type: token
+          request:
+            parameters:
+              paths:
+                assistantId: true
+
+  listConnectors:
+    handler: src/handlers/connector-crud.listConnectors
+    description: List connectors for an assistant
+    events:
+      - http:
+          path: /v1/assistants/{assistantId}/connectors
+          method: get
+          cors: true
+          authorizer:
+            name: cognitoAuthorizer
+            arn: ${self:custom.authorizerArn}
+            resultTtlInSeconds: 300
+            identitySource: method.request.header.Authorization
+            type: token
+          request:
+            parameters:
+              paths:
+                assistantId: true
+
+  getConnector:
+    handler: src/handlers/connector-crud.getConnector
+    description: Get connector by ID
+    events:
+      - http:
+          path: /v1/assistants/{assistantId}/connectors/{connectorId}
+          method: get
+          cors: true
+          authorizer:
+            name: cognitoAuthorizer
+            arn: ${self:custom.authorizerArn}
+            resultTtlInSeconds: 300
+            identitySource: method.request.header.Authorization
+            type: token
+          request:
+            parameters:
+              paths:
+                assistantId: true
+                connectorId: true
+
+  updateConnector:
+    handler: src/handlers/connector-crud.updateConnector
+    description: Update connector configuration
+    events:
+      - http:
+          path: /v1/assistants/{assistantId}/connectors/{connectorId}
+          method: put
+          cors: true
+          authorizer:
+            name: cognitoAuthorizer
+            arn: ${self:custom.authorizerArn}
+            resultTtlInSeconds: 300
+            identitySource: method.request.header.Authorization
+            type: token
+          request:
+            parameters:
+              paths:
+                assistantId: true
+                connectorId: true
+
+  deleteConnector:
+    handler: src/handlers/connector-crud.deleteConnector
+    description: Delete a connector
+    events:
+      - http:
+          path: /v1/assistants/{assistantId}/connectors/{connectorId}
+          method: delete
+          cors: true
+          authorizer:
+            name: cognitoAuthorizer
+            arn: ${self:custom.authorizerArn}
+            resultTtlInSeconds: 300
+            identitySource: method.request.header.Authorization
+            type: token
+          request:
+            parameters:
+              paths:
+                assistantId: true
+                connectorId: true
+
+  testConnector:
+    handler: src/handlers/connector-test.testConnector
+    description: Test a connector tool with sample inputs
+    timeout: 60
+    events:
+      - http:
+          path: /v1/assistants/{assistantId}/connectors/{connectorId}/test
+          method: post
+          cors: true
+          authorizer:
+            name: cognitoAuthorizer
+            arn: ${self:custom.authorizerArn}
+            resultTtlInSeconds: 300
+            identitySource: method.request.header.Authorization
+            type: token
+          request:
+            parameters:
+              paths:
+                assistantId: true
+                connectorId: true
+
+custom:
+  tableName: ai-assistant-platform-${self:provider.stage}
+  authorizerArn: arn:aws:lambda:${self:provider.region}:${aws:accountId}:function:ai-platform-auth-${self:provider.stage}-authorizer
+
+  esbuild:
+    bundle: true
+    minify: true
+    sourcemap: true
+    keepNames: true
+    exclude:
+      - '@aws-sdk'
+    watch:
+      pattern:
+        - 'src/**/*.ts'
+
+  prune:
+    automatic: true
+    number: 1
+
+plugins:
+  - serverless-esbuild
+  - serverless-offline
+  - serverless-prune-plugin
+

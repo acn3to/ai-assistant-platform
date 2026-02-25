@@ -1,0 +1,185 @@
+service: ai-platform-conversation-engine
+frameworkVersion: '>=3.34.0'
+
+package:
+  patterns:
+    - '!node_modules/@aws-sdk/**'
+    - '!node_modules/**/@aws-sdk/**'
+  excludeDevDependencies: true
+  individually: true
+
+useDotenv: true
+
+provider:
+  name: aws
+  runtime: nodejs20.x
+  architecture: arm64
+  memorySize: 512
+  timeout: 60
+  versionFunctions: false
+  deploymentPrefix: serverless
+  stage: ${opt:stage, 'dev'}
+  region: ${opt:region, 'us-east-1'}
+
+  stackTags:
+    Environment: ${self:provider.stage}
+    Project: ai-assistant-platform
+    CostCenter: ai-platform
+
+  environment:
+    STAGE: ${self:provider.stage}
+    REGION: ${self:provider.region}
+    TABLE_NAME: ${self:custom.tableName}
+    BEDROCK_REGION: ${env:BEDROCK_REGION, 'us-east-1'}
+    CONVERSATION_LOGS_BUCKET: ${self:custom.logsBucketName}
+    RESPONSE_TOPIC_ARN: !Ref ResponseTopic
+    ACCESS_CONTROL_ALLOW_ORIGIN: '*'
+    SERVICE_NAME: ${self:service}
+
+  iam:
+    role:
+      managedPolicies:
+        - arn:aws:iam::aws:policy/AmazonBedrockMarketplaceAccess
+      statements:
+        - Effect: Allow
+          Action:
+            - dynamodb:GetItem
+            - dynamodb:PutItem
+            - dynamodb:UpdateItem
+            - dynamodb:DeleteItem
+            - dynamodb:Query
+            - dynamodb:BatchWriteItem
+          Resource:
+            - arn:aws:dynamodb:${self:provider.region}:*:table/${self:custom.tableName}
+            - arn:aws:dynamodb:${self:provider.region}:*:table/${self:custom.tableName}/index/*
+        - Effect: Allow
+          Action:
+            - bedrock:InvokeModel
+            - bedrock:InvokeModelWithResponseStream
+            - bedrock:Converse
+            - bedrock:ConverseStream
+            - bedrock:Retrieve
+            - bedrock:Rerank
+            - bedrock:GetInferenceProfile
+            - bedrock:ListInferenceProfiles
+          Resource: '*'
+        - Effect: Allow
+          Action:
+            - s3:GetObject
+            - s3:PutObject
+          Resource:
+            - arn:aws:s3:::${self:custom.logsBucketName}/*
+        - Effect: Allow
+          Action:
+            - sns:Publish
+          Resource:
+            - !Ref ResponseTopic
+        - Effect: Allow
+          Action:
+            - kms:Decrypt
+          Resource: '*'
+
+functions:
+  processMessage:
+    handler: src/handlers/process-message.handler
+    description: Process inbound message through AI pipeline
+    timeout: 120
+    memorySize: 1024
+    events:
+      - http:
+          path: /v1/conversations/{conversationId}/messages
+          method: post
+          cors: true
+          authorizer:
+            name: cognitoAuthorizer
+            arn: ${self:custom.authorizerArn}
+            resultTtlInSeconds: 300
+            identitySource: method.request.header.Authorization
+            type: token
+
+  startConversation:
+    handler: src/handlers/conversation.startConversation
+    description: Start a new conversation (web test or WhatsApp)
+    events:
+      - http:
+          path: /v1/conversations
+          method: post
+          cors: true
+          authorizer:
+            name: cognitoAuthorizer
+            arn: ${self:custom.authorizerArn}
+            resultTtlInSeconds: 300
+            identitySource: method.request.header.Authorization
+            type: token
+
+  getConversation:
+    handler: src/handlers/conversation.getConversation
+    description: Get conversation details and history
+    events:
+      - http:
+          path: /v1/conversations/{conversationId}
+          method: get
+          cors: true
+          authorizer:
+            name: cognitoAuthorizer
+            arn: ${self:custom.authorizerArn}
+            resultTtlInSeconds: 300
+            identitySource: method.request.header.Authorization
+            type: token
+
+  listConversations:
+    handler: src/handlers/conversation.listConversations
+    description: List conversations for an assistant
+    events:
+      - http:
+          path: /v1/assistants/{assistantId}/conversations
+          method: get
+          cors: true
+          authorizer:
+            name: cognitoAuthorizer
+            arn: ${self:custom.authorizerArn}
+            resultTtlInSeconds: 300
+            identitySource: method.request.header.Authorization
+            type: token
+          request:
+            parameters:
+              paths:
+                assistantId: true
+
+custom:
+  tableName: ai-assistant-platform-${self:provider.stage}
+  logsBucketName: ${env:CONVERSATION_LOGS_BUCKET, 'ai-assistant-platform-logs-dev'}
+  authorizerArn: arn:aws:lambda:${self:provider.region}:${aws:accountId}:function:ai-platform-auth-${self:provider.stage}-authorizer
+
+  esbuild:
+    bundle: true
+    minify: true
+    sourcemap: true
+    keepNames: true
+    exclude:
+      - '@aws-sdk'
+    watch:
+      pattern:
+        - 'src/**/*.ts'
+
+  prune:
+    automatic: true
+    number: 1
+
+resources:
+  Resources:
+    ResponseTopic:
+      Type: AWS::SNS::Topic
+      Properties:
+        TopicName: ${self:service}-response-${self:provider.stage}
+        Tags:
+          - Key: Environment
+            Value: ${self:provider.stage}
+          - Key: Project
+            Value: ai-assistant-platform
+
+plugins:
+  - serverless-esbuild
+  - serverless-offline
+  - serverless-prune-plugin
+

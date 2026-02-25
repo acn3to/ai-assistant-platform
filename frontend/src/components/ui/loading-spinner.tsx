@@ -1,0 +1,32 @@
+import { Loader2 } from 'lucide-react';
+
+interface LoadingSpinnerProps {
+  size?: 'sm' | 'md' | 'lg';
+  className?: string;
+}
+
+const sizeMap = {
+  sm: 'h-4 w-4',
+  md: 'h-6 w-6',
+  lg: 'h-8 w-8',
+};
+
+export function LoadingSpinner({
+  size = 'md',
+  className = '',
+}: LoadingSpinnerProps) {
+  return (
+    <Loader2
+      className={`animate-spin text-primary-600 ${sizeMap[size]} ${className}`}
+    />
+  );
+}
+
+export function PageLoader() {
+  return (
+    <div className="flex h-64 items-center justify-center">
+      <LoadingSpinner size="lg" />
+    </div>
+  );
+}
+

@@ -1,0 +1,35 @@
+{
+  "name": "@ai-platform/webhook",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "start": "sls offline start --stage local",
+    "deploy:dev": "serverless deploy --stage dev",
+    "deploy:prd": "serverless deploy --stage prd",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint src --ext .ts --fix",
+    "test": "jest --coverage"
+  },
+  "dependencies": {
+    "@ai-platform/shared": "*",
+    "@aws-lambda-powertools/logger": "^2.30.2",
+    "@aws-sdk/client-dynamodb": "^3.700.0",
+    "@aws-sdk/client-sns": "^3.700.0",
+    "@aws-sdk/lib-dynamodb": "^3.700.0",
+    "@middy/core": "^5.4.3",
+    "axios": "^1.7.0",
+    "uuid": "^9.0.0"
+  },
+  "devDependencies": {
+    "@types/aws-lambda": "^8.10.133",
+    "@types/node": "^20.14.0",
+    "@types/uuid": "^9.0.0",
+    "esbuild": "^0.19.9",
+    "serverless": "^3.40.0",
+    "serverless-esbuild": "^1.31.0",
+    "serverless-offline": "^13.6.0",
+    "serverless-prune-plugin": "2.0.1",
+    "typescript": "^5.4.5"
+  }
+}
+

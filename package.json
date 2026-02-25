@@ -1,0 +1,29 @@
+{
+  "name": "ai-assistant-platform",
+  "version": "0.1.0",
+  "private": true,
+  "description": "AI Assistant Platform - Create, configure, and deploy WhatsApp AI Assistants",
+  "workspaces": [
+    "services/*",
+    "frontend",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev:frontend": "npm run dev --workspace=frontend",
+    "build:frontend": "npm run build --workspace=frontend",
+    "lint": "npm run lint --workspaces --if-present",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present",
+    "deploy:dev": "export $(grep -v '^#' .env | grep -v '^$' | xargs) && npm run deploy:dev --workspaces --if-present",
+    "deploy:auth": "export $(grep -v '^#' .env | grep -v '^$' | xargs) && npm run deploy:dev --workspace=@ai-platform/auth",
+    "deploy:assistant-api": "export $(grep -v '^#' .env | grep -v '^$' | xargs) && npm run deploy:dev --workspace=@ai-platform/assistant-api",
+    "deploy:data-connectors": "export $(grep -v '^#' .env | grep -v '^$' | xargs) && npm run deploy:dev --workspace=@ai-platform/data-connectors",
+    "deploy:conversation-engine": "export $(grep -v '^#' .env | grep -v '^$' | xargs) && npm run deploy:dev --workspace=@ai-platform/conversation-engine",
+    "deploy:cost-tracking": "export $(grep -v '^#' .env | grep -v '^$' | xargs) && npm run deploy:dev --workspace=@ai-platform/cost-tracking",
+    "deploy:webhook": "export $(grep -v '^#' .env | grep -v '^$' | xargs) && npm run deploy:dev --workspace=@ai-platform/webhook"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}
+

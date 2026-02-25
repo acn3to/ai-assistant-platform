@@ -1,0 +1,330 @@
+service: ai-platform-assistant-api
+frameworkVersion: '>=3.34.0'
+
+package:
+  patterns:
+    - '!node_modules/@aws-sdk/**'
+    - '!node_modules/**/@aws-sdk/**'
+  excludeDevDependencies: true
+  individually: true
+
+useDotenv: true
+
+provider:
+  name: aws
+  runtime: nodejs20.x
+  architecture: arm64
+  memorySize: 256
+  timeout: 30
+  versionFunctions: false
+  deploymentPrefix: serverless
+  stage: ${opt:stage, 'dev'}
+  region: ${opt:region, 'us-east-1'}
+
+  stackTags:
+    Environment: ${self:provider.stage}
+    Project: ai-assistant-platform
+    CostCenter: ai-platform
+
+  environment:
+    STAGE: ${self:provider.stage}
+    REGION: ${self:provider.region}
+    TABLE_NAME: ${self:custom.tableName}
+    KB_BUCKET_NAME: ${self:custom.kbBucketName}
+    ACCESS_CONTROL_ALLOW_ORIGIN: '*'
+    SERVICE_NAME: ${self:service}
+
+  iam:
+    role:
+      statements:
+        - Effect: Allow
+          Action:
+            - dynamodb:GetItem
+            - dynamodb:PutItem
+            - dynamodb:UpdateItem
+            - dynamodb:DeleteItem
+            - dynamodb:Query
+            - dynamodb:BatchWriteItem
+          Resource:
+            - arn:aws:dynamodb:${self:provider.region}:*:table/${self:custom.tableName}
+            - arn:aws:dynamodb:${self:provider.region}:*:table/${self:custom.tableName}/index/*
+        - Effect: Allow
+          Action:
+            - s3:GetObject
+            - s3:PutObject
+            - s3:DeleteObject
+            - s3:ListBucket
+          Resource:
+            - arn:aws:s3:::${self:custom.kbBucketName}
+            - arn:aws:s3:::${self:custom.kbBucketName}/*
+
+functions:
+  createAssistant:
+    handler: src/handlers/assistant.createAssistant
+    description: Create a new assistant
+    events:
+      - http:
+          path: /v1/assistants
+          method: post
+          cors: true
+          authorizer:
+            name: cognitoAuthorizer
+            arn: ${self:custom.authorizerArn}
+            resultTtlInSeconds: 300
+            identitySource: method.request.header.Authorization
+            type: token
+
+  listAssistants:
+    handler: src/handlers/assistant.listAssistants
+    description: List all assistants for the tenant
+    events:
+      - http:
+          path: /v1/assistants
+          method: get
+          cors: true
+          authorizer:
+            name: cognitoAuthorizer
+            arn: ${self:custom.authorizerArn}
+            resultTtlInSeconds: 300
+            identitySource: method.request.header.Authorization
+            type: token
+
+  getAssistant:
+    handler: src/handlers/assistant.getAssistant
+    description: Get assistant by ID
+    events:
+      - http:
+          path: /v1/assistants/{assistantId}
+          method: get
+          cors: true
+          authorizer:
+            name: cognitoAuthorizer
+            arn: ${self:custom.authorizerArn}
+            resultTtlInSeconds: 300
+            identitySource: method.request.header.Authorization
+            type: token
+          request:
+            parameters:
+              paths:
+                assistantId: true
+
+  updateAssistant:
+    handler: src/handlers/assistant.updateAssistant
+    description: Update assistant configuration
+    events:
+      - http:
+          path: /v1/assistants/{assistantId}
+          method: put
+          cors: true
+          authorizer:
+            name: cognitoAuthorizer
+            arn: ${self:custom.authorizerArn}
+            resultTtlInSeconds: 300
+            identitySource: method.request.header.Authorization
+            type: token
+          request:
+            parameters:
+              paths:
+                assistantId: true
+
+  deleteAssistant:
+    handler: src/handlers/assistant.deleteAssistant
+    description: Delete an assistant
+    events:
+      - http:
+          path: /v1/assistants/{assistantId}
+          method: delete
+          cors: true
+          authorizer:
+            name: cognitoAuthorizer
+            arn: ${self:custom.authorizerArn}
+            resultTtlInSeconds: 300
+            identitySource: method.request.header.Authorization
+            type: token
+          request:
+            parameters:
+              paths:
+                assistantId: true
+
+  createPrompt:
+    handler: src/handlers/prompt.createPrompt
+    description: Create a new prompt for an assistant
+    events:
+      - http:
+          path: /v1/assistants/{assistantId}/prompts
+          method: post
+          cors: true
+          authorizer:
+            name: cognitoAuthorizer
+            arn: ${self:custom.authorizerArn}
+            resultTtlInSeconds: 300
+            identitySource: method.request.header.Authorization
+            type: token
+          request:
+            parameters:
+              paths:
+                assistantId: true
+
+  listPrompts:
+    handler: src/handlers/prompt.listPrompts
+    description: List all prompts for an assistant
+    events:
+      - http:
+          path: /v1/assistants/{assistantId}/prompts
+          method: get
+          cors: true
+          authorizer:
+            name: cognitoAuthorizer
+            arn: ${self:custom.authorizerArn}
+            resultTtlInSeconds: 300
+            identitySource: method.request.header.Authorization
+            type: token
+          request:
+            parameters:
+              paths:
+                assistantId: true
+
+  getPrompt:
+    handler: src/handlers/prompt.getPrompt
+    description: Get a prompt by ID
+    events:
+      - http:
+          path: /v1/assistants/{assistantId}/prompts/{promptId}
+          method: get
+          cors: true
+          authorizer:
+            name: cognitoAuthorizer
+            arn: ${self:custom.authorizerArn}
+            resultTtlInSeconds: 300
+            identitySource: method.request.header.Authorization
+            type: token
+          request:
+            parameters:
+              paths:
+                assistantId: true
+                promptId: true
+
+  updatePrompt:
+    handler: src/handlers/prompt.updatePrompt
+    description: Update a prompt (creates new version)
+    events:
+      - http:
+          path: /v1/assistants/{assistantId}/prompts/{promptId}
+          method: put
+          cors: true
+          authorizer:
+            name: cognitoAuthorizer
+            arn: ${self:custom.authorizerArn}
+            resultTtlInSeconds: 300
+            identitySource: method.request.header.Authorization
+            type: token
+          request:
+            parameters:
+              paths:
+                assistantId: true
+                promptId: true
+
+  deletePrompt:
+    handler: src/handlers/prompt.deletePrompt
+    description: Delete a prompt
+    events:
+      - http:
+          path: /v1/assistants/{assistantId}/prompts/{promptId}
+          method: delete
+          cors: true
+          authorizer:
+            name: cognitoAuthorizer
+            arn: ${self:custom.authorizerArn}
+            resultTtlInSeconds: 300
+            identitySource: method.request.header.Authorization
+            type: token
+          request:
+            parameters:
+              paths:
+                assistantId: true
+                promptId: true
+
+  listKBDocuments:
+    handler: src/handlers/knowledge-base.listDocuments
+    description: List Knowledge Base documents
+    events:
+      - http:
+          path: /v1/assistants/{assistantId}/kb/documents
+          method: get
+          cors: true
+          authorizer:
+            name: cognitoAuthorizer
+            arn: ${self:custom.authorizerArn}
+            resultTtlInSeconds: 300
+            identitySource: method.request.header.Authorization
+            type: token
+          request:
+            parameters:
+              paths:
+                assistantId: true
+
+  uploadKBDocument:
+    handler: src/handlers/knowledge-base.uploadDocument
+    description: Upload document to Knowledge Base
+    timeout: 60
+    events:
+      - http:
+          path: /v1/assistants/{assistantId}/kb/documents
+          method: post
+          cors: true
+          authorizer:
+            name: cognitoAuthorizer
+            arn: ${self:custom.authorizerArn}
+            resultTtlInSeconds: 300
+            identitySource: method.request.header.Authorization
+            type: token
+          request:
+            parameters:
+              paths:
+                assistantId: true
+
+  deleteKBDocument:
+    handler: src/handlers/knowledge-base.deleteDocument
+    description: Delete document from Knowledge Base
+    events:
+      - http:
+          path: /v1/assistants/{assistantId}/kb/documents/{filename}
+          method: delete
+          cors: true
+          authorizer:
+            name: cognitoAuthorizer
+            arn: ${self:custom.authorizerArn}
+            resultTtlInSeconds: 300
+            identitySource: method.request.header.Authorization
+            type: token
+          request:
+            parameters:
+              paths:
+                assistantId: true
+                filename: true
+
+custom:
+  tableName: ai-assistant-platform-${self:provider.stage}
+  kbBucketName: ${env:KB_BUCKET_NAME, 'ai-assistant-platform-kb-dev'}
+  authorizerArn: arn:aws:lambda:${self:provider.region}:${aws:accountId}:function:ai-platform-auth-${self:provider.stage}-authorizer
+
+  esbuild:
+    bundle: true
+    minify: true
+    sourcemap: true
+    keepNames: true
+    exclude:
+      - '@aws-sdk'
+    watch:
+      pattern:
+        - 'src/**/*.ts'
+
+  prune:
+    automatic: true
+    number: 1
+
+plugins:
+  - serverless-esbuild
+  - serverless-offline
+  - serverless-prune-plugin
+

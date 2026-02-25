@@ -1,0 +1,67 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: AI Assistant Platform - DynamoDB Single Table
+
+Parameters:
+  Stage:
+    Type: String
+    Default: dev
+    AllowedValues: [dev, hml, prd]
+
+Resources:
+  MainTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub ai-assistant-platform-${Stage}
+      BillingMode: PAY_PER_REQUEST
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      StreamSpecification:
+        StreamViewType: NEW_AND_OLD_IMAGES
+      TimeToLiveSpecification:
+        AttributeName: ttl
+        Enabled: true
+
+      AttributeDefinitions:
+        - AttributeName: PK
+          AttributeType: S
+        - AttributeName: SK
+          AttributeType: S
+        - AttributeName: GSI1PK
+          AttributeType: S
+        - AttributeName: GSI1SK
+          AttributeType: S
+
+      KeySchema:
+        - AttributeName: PK
+          KeyType: HASH
+        - AttributeName: SK
+          KeyType: RANGE
+
+      GlobalSecondaryIndexes:
+        - IndexName: GSI1
+          KeySchema:
+            - AttributeName: GSI1PK
+              KeyType: HASH
+            - AttributeName: GSI1SK
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+
+      Tags:
+        - Key: Environment
+          Value: !Ref Stage
+        - Key: Project
+          Value: ai-assistant-platform
+        - Key: CostCenter
+          Value: ai-platform
+
+Outputs:
+  TableName:
+    Value: !Ref MainTable
+    Export:
+      Name: !Sub ai-assistant-platform-table-${Stage}
+  TableArn:
+    Value: !GetAtt MainTable.Arn
+    Export:
+      Name: !Sub ai-assistant-platform-table-arn-${Stage}
+

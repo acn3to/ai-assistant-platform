@@ -1,0 +1,136 @@
+service: ai-platform-webhook
+frameworkVersion: '>=3.34.0'
+
+package:
+  patterns:
+    - '!node_modules/@aws-sdk/**'
+    - '!node_modules/**/@aws-sdk/**'
+  excludeDevDependencies: true
+  individually: true
+
+useDotenv: true
+
+provider:
+  name: aws
+  runtime: nodejs20.x
+  architecture: arm64
+  memorySize: 256
+  timeout: 30
+  versionFunctions: false
+  deploymentPrefix: serverless
+  stage: ${opt:stage, 'dev'}
+  region: ${opt:region, 'us-east-1'}
+
+  stackTags:
+    Environment: ${self:provider.stage}
+    Project: ai-assistant-platform
+    CostCenter: ai-platform
+
+  environment:
+    STAGE: ${self:provider.stage}
+    REGION: ${self:provider.region}
+    TABLE_NAME: ${self:custom.tableName}
+    INBOUND_TOPIC_ARN: !Ref InboundMessageTopic
+    WHATSAPP_VERIFY_TOKEN: ${env:WHATSAPP_VERIFY_TOKEN, 'default-verify-token'}
+    ACCESS_CONTROL_ALLOW_ORIGIN: '*'
+    SERVICE_NAME: ${self:service}
+
+  iam:
+    role:
+      statements:
+        - Effect: Allow
+          Action:
+            - dynamodb:GetItem
+            - dynamodb:PutItem
+            - dynamodb:Query
+          Resource:
+            - arn:aws:dynamodb:${self:provider.region}:*:table/${self:custom.tableName}
+            - arn:aws:dynamodb:${self:provider.region}:*:table/${self:custom.tableName}/index/*
+        - Effect: Allow
+          Action:
+            - sns:Publish
+          Resource:
+            - !Ref InboundMessageTopic
+
+functions:
+  whatsappWebhook:
+    handler: src/handlers/whatsapp-webhook.handler
+    description: WhatsApp webhook handler (verification + inbound messages)
+    events:
+      - http:
+          path: /v1/webhook/whatsapp
+          method: get
+          cors: true
+      - http:
+          path: /v1/webhook/whatsapp
+          method: post
+          cors: true
+
+  sendMessage:
+    handler: src/handlers/send-message.handler
+    description: Send outbound message via messaging provider
+    events:
+      - sqs:
+          arn: !GetAtt OutboundMessageQueue.Arn
+          batchSize: 1
+
+custom:
+  tableName: ai-assistant-platform-${self:provider.stage}
+
+  esbuild:
+    bundle: true
+    minify: true
+    sourcemap: true
+    keepNames: true
+    exclude:
+      - '@aws-sdk'
+    watch:
+      pattern:
+        - 'src/**/*.ts'
+
+  prune:
+    automatic: true
+    number: 1
+
+resources:
+  Resources:
+    InboundMessageTopic:
+      Type: AWS::SNS::Topic
+      Properties:
+        TopicName: ${self:service}-inbound-${self:provider.stage}
+        Tags:
+          - Key: Environment
+            Value: ${self:provider.stage}
+          - Key: Project
+            Value: ai-assistant-platform
+
+    OutboundMessageQueue:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: ${self:service}-outbound-${self:provider.stage}
+        VisibilityTimeout: 60
+        MessageRetentionPeriod: 86400
+        RedrivePolicy:
+          deadLetterTargetArn: !GetAtt OutboundDLQ.Arn
+          maxReceiveCount: 3
+        Tags:
+          - Key: Environment
+            Value: ${self:provider.stage}
+
+    OutboundDLQ:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: ${self:service}-outbound-dlq-${self:provider.stage}
+        MessageRetentionPeriod: 1209600
+
+  Outputs:
+    InboundMessageTopicArn:
+      Value: !Ref InboundMessageTopic
+      Export:
+        Name: ${self:service}-inbound-topic-arn-${self:provider.stage}
+
+plugins:
+  - serverless-esbuild
+  - serverless-offline
+  - serverless-prune-plugin
+

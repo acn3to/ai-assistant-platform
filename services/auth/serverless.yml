@@ -1,0 +1,183 @@
+service: ai-platform-auth
+frameworkVersion: '>=3.34.0'
+
+package:
+  patterns:
+    - '!node_modules/@aws-sdk/**'
+    - '!node_modules/**/@aws-sdk/**'
+  excludeDevDependencies: true
+  individually: true
+
+useDotenv: true
+
+provider:
+  name: aws
+  runtime: nodejs20.x
+  architecture: arm64
+  memorySize: 256
+  timeout: 30
+  versionFunctions: false
+  deploymentPrefix: serverless
+  stage: ${opt:stage, 'dev'}
+  region: ${opt:region, 'us-east-1'}
+
+  stackTags:
+    Environment: ${self:provider.stage}
+    Project: ai-assistant-platform
+    CostCenter: ai-platform
+
+  environment:
+    STAGE: ${self:provider.stage}
+    REGION: ${self:provider.region}
+    TABLE_NAME: ${self:custom.tableName}
+    USER_POOL_ID: ${self:custom.userPoolId}
+    USER_POOL_CLIENT_ID: ${self:custom.userPoolClientId}
+    ACCESS_CONTROL_ALLOW_ORIGIN: '*'
+    SERVICE_NAME: ${self:service}
+
+  iam:
+    role:
+      statements:
+        - Effect: Allow
+          Action:
+            - dynamodb:GetItem
+            - dynamodb:PutItem
+            - dynamodb:UpdateItem
+            - dynamodb:DeleteItem
+            - dynamodb:Query
+          Resource:
+            - arn:aws:dynamodb:${self:provider.region}:*:table/${self:custom.tableName}
+            - arn:aws:dynamodb:${self:provider.region}:*:table/${self:custom.tableName}/index/*
+        - Effect: Allow
+          Action:
+            - cognito-idp:AdminCreateUser
+            - cognito-idp:AdminDeleteUser
+            - cognito-idp:AdminGetUser
+            - cognito-idp:AdminUpdateUserAttributes
+            - cognito-idp:AdminInitiateAuth
+            - cognito-idp:AdminSetUserPassword
+            - cognito-idp:ListUsers
+          Resource:
+            - arn:aws:cognito-idp:${self:provider.region}:*:userpool/${self:custom.userPoolId}
+
+functions:
+  login:
+    handler: src/handlers/auth.login
+    description: Authenticate user and return JWT tokens
+    events:
+      - http:
+          path: /v1/auth/login
+          method: post
+          cors: true
+
+  signup:
+    handler: src/handlers/auth.signup
+    description: Register new tenant and admin user
+    events:
+      - http:
+          path: /v1/auth/signup
+          method: post
+          cors: true
+
+  refreshToken:
+    handler: src/handlers/auth.refreshToken
+    description: Refresh authentication tokens
+    events:
+      - http:
+          path: /v1/auth/refresh
+          method: post
+          cors: true
+
+  authorizer:
+    handler: src/handlers/authorizer.handler
+    description: Lambda authorizer for API Gateway
+
+  createUser:
+    handler: src/handlers/user-management.createUser
+    description: Create a new user in the tenant
+    events:
+      - http:
+          path: /v1/users
+          method: post
+          cors: true
+          authorizer:
+            name: authorizer
+            resultTtlInSeconds: 300
+            identitySource: method.request.header.Authorization
+            type: token
+
+  listUsers:
+    handler: src/handlers/user-management.listUsers
+    description: List all users in the tenant
+    events:
+      - http:
+          path: /v1/users
+          method: get
+          cors: true
+          authorizer:
+            name: authorizer
+            resultTtlInSeconds: 300
+            identitySource: method.request.header.Authorization
+            type: token
+
+  getUser:
+    handler: src/handlers/user-management.getUser
+    description: Get user by email
+    events:
+      - http:
+          path: /v1/users/{email}
+          method: get
+          cors: true
+          request:
+            parameters:
+              paths:
+                email: true
+          authorizer:
+            name: authorizer
+            resultTtlInSeconds: 300
+            identitySource: method.request.header.Authorization
+            type: token
+
+  deleteUser:
+    handler: src/handlers/user-management.deleteUser
+    description: Delete a user from the tenant
+    events:
+      - http:
+          path: /v1/users/{email}
+          method: delete
+          cors: true
+          request:
+            parameters:
+              paths:
+                email: true
+          authorizer:
+            name: authorizer
+            resultTtlInSeconds: 300
+            identitySource: method.request.header.Authorization
+            type: token
+
+custom:
+  tableName: ai-assistant-platform-${self:provider.stage}
+  userPoolId: ${env:USER_POOL_ID, 'us-east-1_placeholder'}
+  userPoolClientId: ${env:USER_POOL_CLIENT_ID, 'placeholder'}
+
+  esbuild:
+    bundle: true
+    minify: true
+    sourcemap: true
+    keepNames: true
+    exclude:
+      - '@aws-sdk'
+    watch:
+      pattern:
+        - 'src/**/*.ts'
+
+  prune:
+    automatic: true
+    number: 1
+
+plugins:
+  - serverless-esbuild
+  - serverless-offline
+  - serverless-prune-plugin
+
