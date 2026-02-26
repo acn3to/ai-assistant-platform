@@ -1,6 +1,6 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { withObservability, logger, ok, badRequest, internalError } from '@ai-platform/shared';
-import { costRepository } from '../repositories/cost.repository';
+import { costRepository } from '../repositories/impl/cost.repository';
 import type { IPricingConfig } from '@ai-platform/shared';
 
 const updatePricingHandler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {

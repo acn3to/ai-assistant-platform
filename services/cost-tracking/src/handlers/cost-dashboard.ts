@@ -1,6 +1,6 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { withObservability, logger, ok, badRequest, internalError } from '@ai-platform/shared';
-import { costRepository } from '../repositories/cost.repository';
+import { costRepository } from '../repositories/impl/cost.repository';
 
 const getDailyCostsHandler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
   try {
@@ -13,7 +13,6 @@ const getDailyCostsHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
     }
 
     const rollups = await costRepository.getDailyRollups(tenantId, startDate, endDate);
-
     const totalCost = rollups.reduce((sum, r) => sum + r.totalEstimatedCost, 0);
     const totalRequests = rollups.reduce((sum, r) => sum + r.totalRequests, 0);
     const totalConversations = rollups.reduce((sum, r) => sum + r.totalConversations, 0);
@@ -24,9 +23,7 @@ const getDailyCostsHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
         totalCost: Math.round(totalCost * 10000) / 10000,
         totalRequests,
         totalConversations,
-        avgCostPerDay: rollups.length > 0
-          ? Math.round((totalCost / rollups.length) * 10000) / 10000
-          : 0,
+        avgCostPerDay: rollups.length > 0 ? Math.round((totalCost / rollups.length) * 10000) / 10000 : 0,
       },
     });
   } catch (error) {
@@ -46,7 +43,6 @@ const getMonthlyCostsHandler = async (event: APIGatewayProxyEvent): Promise<APIG
     }
 
     const rollups = await costRepository.getMonthlyRollups(tenantId, startMonth, endMonth);
-
     return ok({ rollups });
   } catch (error) {
     logger.error('Get monthly costs failed', { error });
@@ -61,16 +57,12 @@ const getConversationCostsHandler = async (event: APIGatewayProxyEvent): Promise
 
     const events = await costRepository.getCostEventsByConversation(conversationId);
 
-    const totalCost = events.reduce((sum, e) => sum + e.estimatedCost, 0);
-    const totalInputTokens = events.reduce((sum, e) => sum + e.inputTokens, 0);
-    const totalOutputTokens = events.reduce((sum, e) => sum + e.outputTokens, 0);
-
     return ok({
       events,
       summary: {
-        totalCost: Math.round(totalCost * 10000) / 10000,
-        totalInputTokens,
-        totalOutputTokens,
+        totalCost: Math.round(events.reduce((sum, e) => sum + e.estimatedCost, 0) * 10000) / 10000,
+        totalInputTokens: events.reduce((sum, e) => sum + e.inputTokens, 0),
+        totalOutputTokens: events.reduce((sum, e) => sum + e.outputTokens, 0),
         totalRequests: events.length,
       },
     });
@@ -83,4 +75,3 @@ const getConversationCostsHandler = async (event: APIGatewayProxyEvent): Promise
 export const getDailyCosts = withObservability(getDailyCostsHandler);
 export const getMonthlyCosts = withObservability(getMonthlyCostsHandler);
 export const getConversationCosts = withObservability(getConversationCostsHandler);
-

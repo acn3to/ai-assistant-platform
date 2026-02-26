@@ -20,7 +20,7 @@ const requestIdMiddleware = (): middy.MiddlewareObj => ({
     logger.appendKeys({ requestId });
 
     // Extract tenantId from authorizer context if available
-    const tenantId = request.event?.requestContext?.authorizer?.tenantId;
+    const tenantId = (request.event as Record<string, any>)?.requestContext?.authorizer?.tenantId;
     if (tenantId) {
       logger.appendKeys({ tenantId });
     }

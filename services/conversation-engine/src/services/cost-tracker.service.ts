@@ -1,36 +1,24 @@
-import { PutCommand } from '@aws-sdk/lib-dynamodb';
-import { docClient, TABLE_NAME, keys, logger } from '@ai-platform/shared';
+import { logger } from '@ai-platform/shared';
 import type { ICostEvent } from '@ai-platform/shared';
+import type { ICostEventRepository } from '../repositories/interfaces/cost-event.repository.interface';
+import { costEventRepository } from '../repositories/impl/cost-event.repository';
 
-class CostTracker {
-  /**
-   * Track a single cost event (per-request granularity).
-   * Appended as an immutable event in DynamoDB.
-   */
+export interface ICostTracker {
+  trackEvent(event: Omit<ICostEvent, 'timestamp'>): Promise<void>;
+}
+
+class CostTracker implements ICostTracker {
+  constructor(private readonly repo: ICostEventRepository) {}
+
   async trackEvent(event: Omit<ICostEvent, 'timestamp'>): Promise<void> {
     const timestamp = new Date().toISOString();
-    const keyAttrs = keys.costEvent(event.conversationId, timestamp);
-    const gsi1Keys = keys.costEventByTenant(event.tenantId, timestamp);
-
     try {
-      await docClient.send(
-        new PutCommand({
-          TableName: TABLE_NAME,
-          Item: {
-            ...keyAttrs,
-            ...gsi1Keys,
-            ...event,
-            timestamp,
-            entityType: 'CostEvent',
-          },
-        }),
-      );
+      await this.repo.save({ ...event, timestamp });
     } catch (error) {
-      // Cost tracking should not fail the main request
+      // Cost tracking must not fail the main request
       logger.warn('Failed to track cost event', { error, event });
     }
   }
 }
 
-export const costTracker = new CostTracker();
-
+export const costTracker = new CostTracker(costEventRepository);

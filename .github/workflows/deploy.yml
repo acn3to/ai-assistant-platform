@@ -1,0 +1,106 @@
+name: Deploy to Production
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy:
+    name: Deploy All Services → prd
+    runs-on: ubuntu-latest
+    environment: production
+
+    permissions:
+      id-token: write
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Test (safety net before deploy)
+        run: npm test
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: us-east-1
+
+      # ── Infrastructure (idempotent) ─────────────────────────────────────────
+      - name: Deploy DynamoDB stack
+        run: |
+          aws cloudformation deploy \
+            --template-file infra/dynamodb.yml \
+            --stack-name ai-assistant-platform-dynamodb-prd \
+            --parameter-overrides Stage=prd \
+            --region us-east-1 \
+            --no-fail-on-empty-changeset
+
+      - name: Deploy Cognito stack
+        run: |
+          aws cloudformation deploy \
+            --template-file infra/cognito.yml \
+            --stack-name ai-assistant-platform-cognito-prd \
+            --parameter-overrides Stage=prd \
+            --region us-east-1 \
+            --capabilities CAPABILITY_NAMED_IAM \
+            --no-fail-on-empty-changeset
+
+      - name: Deploy S3 stack
+        run: |
+          aws cloudformation deploy \
+            --template-file infra/s3.yml \
+            --stack-name ai-assistant-platform-s3-prd \
+            --parameter-overrides Stage=prd \
+            --region us-east-1 \
+            --no-fail-on-empty-changeset
+
+      # ── Read infra outputs → set env vars for sls deploy ────────────────────
+      - name: Export infra outputs as env vars
+        run: |
+          USER_POOL_ID=$(aws cloudformation describe-stacks \
+            --stack-name ai-assistant-platform-cognito-prd \
+            --query 'Stacks[0].Outputs[?OutputKey==`UserPoolId`].OutputValue' \
+            --output text)
+          USER_POOL_CLIENT_ID=$(aws cloudformation describe-stacks \
+            --stack-name ai-assistant-platform-cognito-prd \
+            --query 'Stacks[0].Outputs[?OutputKey==`UserPoolClientId`].OutputValue' \
+            --output text)
+          KB_BUCKET_NAME=$(aws cloudformation describe-stacks \
+            --stack-name ai-assistant-platform-s3-prd \
+            --query 'Stacks[0].Outputs[?OutputKey==`KnowledgeBaseBucketName`].OutputValue' \
+            --output text)
+          CONVERSATION_LOGS_BUCKET=$(aws cloudformation describe-stacks \
+            --stack-name ai-assistant-platform-s3-prd \
+            --query 'Stacks[0].Outputs[?OutputKey==`ConversationLogsBucketName`].OutputValue' \
+            --output text)
+          echo "USER_POOL_ID=$USER_POOL_ID" >> $GITHUB_ENV
+          echo "USER_POOL_CLIENT_ID=$USER_POOL_CLIENT_ID" >> $GITHUB_ENV
+          echo "KB_BUCKET_NAME=$KB_BUCKET_NAME" >> $GITHUB_ENV
+          echo "CONVERSATION_LOGS_BUCKET=$CONVERSATION_LOGS_BUCKET" >> $GITHUB_ENV
+          echo "BEDROCK_REGION=us-east-1" >> $GITHUB_ENV
+          echo "WHATSAPP_VERIFY_TOKEN=${{ secrets.WHATSAPP_VERIFY_TOKEN }}" >> $GITHUB_ENV
+
+      # ── Services (fail-fast: each step must succeed before next runs) ───────
+      - name: Deploy auth
+        run: cd services/auth && npx sls deploy --stage prd
+
+      - name: Deploy assistant-api
+        run: cd services/assistant-api && npx sls deploy --stage prd
+
+      - name: Deploy data-connectors
+        run: cd services/data-connectors && npx sls deploy --stage prd
+
+      - name: Deploy conversation-engine
+        run: cd services/conversation-engine && npx sls deploy --stage prd
+
+      - name: Deploy cost-tracking
+        run: cd services/cost-tracking && npx sls deploy --stage prd

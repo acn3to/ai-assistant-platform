@@ -1,21 +1,19 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
-import { withObservability, logger, ok, badRequest, internalError, unauthorized, created } from '@ai-platform/shared';
-import { authService } from '../services/auth.service';
+import { withObservability, logger, ok, created, badRequest, internalError, unauthorized } from '@ai-platform/shared';
+import { signupUseCase } from '../use-cases/signup.use-case';
+import { loginUseCase } from '../use-cases/login.use-case';
+import { refreshTokenUseCase } from '../use-cases/refresh-token.use-case';
 
 const loginHandler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
   try {
     const body = JSON.parse(event.body || '{}');
     const { email, password } = body;
 
-    if (!email || !password) {
-      return badRequest('Email and password are required');
-    }
+    if (!email || !password) return badRequest('Email and password are required');
 
-    const result = await authService.login(email, password);
+    const result = await loginUseCase.execute(email, password);
 
-    if (!result) {
-      return unauthorized('Invalid credentials');
-    }
+    if (!result) return unauthorized('Invalid credentials');
 
     return ok(result);
   } catch (error) {
@@ -33,12 +31,12 @@ const signupHandler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPro
       return badRequest('Email, password, name, and tenantName are required');
     }
 
-    const result = await authService.signup({ email, password, name, tenantName });
+    const result = await signupUseCase.execute({ email, password, name, tenantName });
 
     return created(result);
-  } catch (error: any) {
+  } catch (error: unknown) {
     logger.error('Signup failed', { error });
-    if (error.name === 'UsernameExistsException') {
+    if (error instanceof Error && error.name === 'UsernameExistsException') {
       return badRequest('User already exists');
     }
     return internalError('Registration failed');
@@ -50,15 +48,11 @@ const refreshTokenHandler = async (event: APIGatewayProxyEvent): Promise<APIGate
     const body = JSON.parse(event.body || '{}');
     const { refreshToken } = body;
 
-    if (!refreshToken) {
-      return badRequest('Refresh token is required');
-    }
+    if (!refreshToken) return badRequest('Refresh token is required');
 
-    const result = await authService.refreshToken(refreshToken);
+    const result = await refreshTokenUseCase.execute(refreshToken);
 
-    if (!result) {
-      return unauthorized('Invalid refresh token');
-    }
+    if (!result) return unauthorized('Invalid refresh token');
 
     return ok(result);
   } catch (error) {
@@ -70,4 +64,3 @@ const refreshTokenHandler = async (event: APIGatewayProxyEvent): Promise<APIGate
 export const login = withObservability(loginHandler);
 export const signup = withObservability(signupHandler);
 export const refreshToken = withObservability(refreshTokenHandler);
-

@@ -1,7 +1,7 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { v4 as uuidv4 } from 'uuid';
 import { withObservability, logger, ok, created, badRequest, notFound, internalError } from '@ai-platform/shared';
-import { conversationRepository } from '../repositories/conversation.repository';
+import { conversationRepository } from '../repositories/impl/conversation.repository';
 import type { IConversation } from '@ai-platform/shared';
 
 const startConversationHandler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
@@ -77,4 +77,3 @@ const listConversationsHandler = async (event: APIGatewayProxyEvent): Promise<AP
 export const startConversation = withObservability(startConversationHandler);
 export const getConversation = withObservability(getConversationHandler);
 export const listConversations = withObservability(listConversationsHandler);
-

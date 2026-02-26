@@ -1,11 +1,8 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
-import { S3Client, PutObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3';
 import { withObservability, logger, ok, created, noContent, badRequest, internalError } from '@ai-platform/shared';
-import { kbDocumentRepository } from '../repositories/kb-document.repository';
-import type { IKBDocument } from '@ai-platform/shared';
-
-const s3Client = new S3Client({ region: process.env.REGION || 'us-east-1' });
-const KB_BUCKET_NAME = process.env.KB_BUCKET_NAME || '';
+import { uploadDocumentUseCase } from '../use-cases/upload-document.use-case';
+import { deleteDocumentUseCase } from '../use-cases/delete-document.use-case';
+import { kbDocumentRepository } from '../repositories/impl/kb-document.repository';
 
 const listDocumentsHandler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
   try {
@@ -32,39 +29,13 @@ const uploadDocumentHandler = async (event: APIGatewayProxyEvent): Promise<APIGa
       return badRequest('filename and content are required');
     }
 
-    const s3Key = `${assistantId}/${category || 'general'}/${filename}`;
-    const contentBuffer = Buffer.from(content, 'base64');
-
-    // Upload to S3
-    await s3Client.send(
-      new PutObjectCommand({
-        Bucket: KB_BUCKET_NAME,
-        Key: s3Key,
-        Body: contentBuffer,
-        ContentType: contentType || 'text/plain',
-        Metadata: {
-          assistantId,
-          category: category || 'general',
-          filename,
-        },
-      }),
-    );
-
-    const now = new Date().toISOString();
-    const doc: IKBDocument = {
+    const doc = await uploadDocumentUseCase.execute({
       assistantId,
       filename,
-      category: category || 'general',
+      content: Buffer.from(content, 'base64'),
       contentType: contentType || 'text/plain',
-      sizeBytes: contentBuffer.length,
-      s3Key,
-      syncStatus: 'pending',
-      createdAt: now,
-      updatedAt: now,
-    };
-
-    await kbDocumentRepository.create(doc);
-    logger.info('KB document uploaded', { assistantId, filename, s3Key });
+      category,
+    });
 
     return created(doc);
   } catch (error) {
@@ -79,18 +50,7 @@ const deleteDocumentHandler = async (event: APIGatewayProxyEvent): Promise<APIGa
     const filename = event.pathParameters?.filename;
     if (!assistantId || !filename) return badRequest('assistantId and filename are required');
 
-    const doc = await kbDocumentRepository.get(assistantId, decodeURIComponent(filename));
-    if (doc?.s3Key) {
-      await s3Client.send(
-        new DeleteObjectCommand({
-          Bucket: KB_BUCKET_NAME,
-          Key: doc.s3Key,
-        }),
-      );
-    }
-
-    await kbDocumentRepository.delete(assistantId, decodeURIComponent(filename));
-    logger.info('KB document deleted', { assistantId, filename });
+    await deleteDocumentUseCase.execute(assistantId, decodeURIComponent(filename));
 
     return noContent();
   } catch (error) {
@@ -102,4 +62,3 @@ const deleteDocumentHandler = async (event: APIGatewayProxyEvent): Promise<APIGa
 export const listDocuments = withObservability(listDocumentsHandler);
 export const uploadDocument = withObservability(uploadDocumentHandler);
 export const deleteDocument = withObservability(deleteDocumentHandler);
-
