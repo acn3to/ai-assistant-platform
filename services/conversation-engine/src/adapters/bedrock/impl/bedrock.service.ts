@@ -6,7 +6,6 @@ import {
   ToolConfiguration,
   ToolSpecification,
 } from '@aws-sdk/client-bedrock-runtime';
-import { logger } from '@ai-platform/shared';
 import type { ConverseInput, ConverseOutput, ToolUseBlock } from '../../../types';
 import type { IBedrockService } from '../interfaces/bedrock.service.interface';
 
