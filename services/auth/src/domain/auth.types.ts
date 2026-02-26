@@ -7,7 +7,16 @@ export interface SignupInput {
   tenantName: string;
 }
 
-export interface LoginResult {
+export interface SignupResult {
+  tenantId: string;
+  user: { email: string; name: string; role: string };
+  accessToken: string | undefined;
+  idToken: string | undefined;
+  refreshToken: string | undefined;
+  expiresIn: number | undefined;
+}
+
+export interface TokenResult {
   accessToken: string | undefined;
   idToken: string | undefined;
   refreshToken: string | undefined;
@@ -25,4 +34,3 @@ export interface CreateUserInput {
   name: string;
   role: UserRole;
 }
-
