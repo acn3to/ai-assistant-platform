@@ -28,8 +28,8 @@ describe('SignupUseCase', () => {
   let useCase: SignupUseCase;
 
   beforeEach(() => {
-    jest.clearAllMocks();
-    useCase = new SignupUseCase(mockCognito, mockTenantRepo, mockUserRepo);
+    jest.resetAllMocks();
+    useCase = new SignupUseCase(mockCognito, mockTenantRepo, mockUserRepo, []);
   });
 
   it('creates tenant, cognito user, dynamo user, then auto-logs in', async () => {
@@ -80,5 +80,38 @@ describe('SignupUseCase', () => {
     await expect(
       useCase.execute({ email: 'a@b.com', password: 'pass', name: 'name', tenantName: 'corp' }),
     ).rejects.toThrow('DynamoDB error');
+  });
+
+  describe('email allowlist', () => {
+    it('rejects emails not in the allowlist', async () => {
+      useCase = new SignupUseCase(mockCognito, mockTenantRepo, mockUserRepo, ['allowed@example.com']);
+
+      await expect(
+        useCase.execute({ email: 'blocked@example.com', password: 'pass', name: 'name', tenantName: 'corp' }),
+      ).rejects.toThrow('EmailNotAllowed');
+
+      expect(mockTenantRepo.create).not.toHaveBeenCalled();
+      expect(mockCognito.adminCreateUser).not.toHaveBeenCalled();
+    });
+
+    it('allows emails in the allowlist (case-insensitive)', async () => {
+      mockCognito.adminInitiateAuth.mockResolvedValue({ accessToken: 'tok', idToken: 'id', refreshToken: 'ref', expiresIn: 3600 });
+      useCase = new SignupUseCase(mockCognito, mockTenantRepo, mockUserRepo, ['allowed@example.com']);
+
+      await expect(
+        useCase.execute({ email: 'ALLOWED@EXAMPLE.COM', password: 'pass', name: 'name', tenantName: 'corp' }),
+      ).resolves.toBeDefined();
+
+      expect(mockTenantRepo.create).toHaveBeenCalled();
+    });
+
+    it('allows all emails when allowlist is empty', async () => {
+      mockCognito.adminInitiateAuth.mockResolvedValue(null);
+      useCase = new SignupUseCase(mockCognito, mockTenantRepo, mockUserRepo, []);
+
+      await expect(
+        useCase.execute({ email: 'anyone@example.com', password: 'pass', name: 'name', tenantName: 'corp' }),
+      ).resolves.toBeDefined();
+    });
   });
 });

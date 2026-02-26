@@ -11,10 +11,15 @@ export class SignupUseCase {
     private readonly cognito: ICognitoAdapter,
     private readonly tenantRepo: ITenantRepository,
     private readonly userRepo: IUserRepository,
+    private readonly allowedEmails: string[] = [],
   ) {}
 
   async execute(input: SignupInput): Promise<SignupResult> {
     const { email, password, name, tenantName } = input;
+
+    if (this.allowedEmails.length > 0 && !this.allowedEmails.includes(email.toLowerCase())) {
+      throw new Error('EmailNotAllowed');
+    }
     const tenantId = uuidv4();
     const now = new Date().toISOString();
 
@@ -55,4 +60,9 @@ import { cognitoAdapter } from '../adapters/cognito/impl/cognito.adapter';
 import { tenantRepository } from '../repositories/impl/tenant.repository';
 import { userRepository } from '../repositories/impl/user.repository';
 
-export const signupUseCase = new SignupUseCase(cognitoAdapter, tenantRepository, userRepository);
+const allowedEmails = (process.env.ALLOWED_EMAILS || '')
+  .split(',')
+  .map((e) => e.trim().toLowerCase())
+  .filter(Boolean);
+
+export const signupUseCase = new SignupUseCase(cognitoAdapter, tenantRepository, userRepository, allowedEmails);
