@@ -116,7 +116,7 @@ export class ProcessMessageUseCase {
     }
 
     // Agentic loop
-    let messages = [...bedrockMessages];
+    const messages = [...bedrockMessages];
     let toolCallCount = 0;
     let totalInputTokens = 0;
     let totalOutputTokens = 0;

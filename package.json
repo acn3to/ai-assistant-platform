@@ -22,6 +22,11 @@
     "deploy:cost-tracking": "export $(grep -v '^#' .env | grep -v '^$' | xargs) && npm run deploy:dev --workspace=@ai-platform/cost-tracking",
     "deploy:webhook": "export $(grep -v '^#' .env | grep -v '^$' | xargs) && npm run deploy:dev --workspace=@ai-platform/webhook"
   },
+  "devDependencies": {
+    "@typescript-eslint/eslint-plugin": "^7.18.0",
+    "@typescript-eslint/parser": "^7.18.0",
+    "eslint": "^8.57.1"
+  },
   "engines": {
     "node": ">=20.0.0"
   }
