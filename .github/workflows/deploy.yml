@@ -37,7 +37,7 @@ jobs:
       # ── Infrastructure (idempotent) ─────────────────────────────────────────
       - name: Deploy DynamoDB stack
         run: |
-          ~/.local/bin/aws cloudformation deploy \
+          aws cloudformation deploy \
             --template-file infra/dynamodb.yml \
             --stack-name ai-assistant-platform-dynamodb-prod \
             --parameter-overrides Stage=prod \
@@ -46,7 +46,7 @@ jobs:
 
       - name: Deploy Cognito stack
         run: |
-          ~/.local/bin/aws cloudformation deploy \
+          aws cloudformation deploy \
             --template-file infra/cognito.yml \
             --stack-name ai-assistant-platform-cognito-prod \
             --parameter-overrides Stage=prod \
@@ -55,7 +55,7 @@ jobs:
 
       - name: Deploy S3 stack
         run: |
-          ~/.local/bin/aws cloudformation deploy \
+          aws cloudformation deploy \
             --template-file infra/s3.yml \
             --stack-name ai-assistant-platform-s3-prod \
             --parameter-overrides Stage=prod \
