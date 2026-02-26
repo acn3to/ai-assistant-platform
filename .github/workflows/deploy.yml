@@ -88,6 +88,7 @@ jobs:
           echo "CONVERSATION_LOGS_BUCKET=$CONVERSATION_LOGS_BUCKET" >> $GITHUB_ENV
           echo "BEDROCK_REGION=us-east-1" >> $GITHUB_ENV
           echo "WHATSAPP_VERIFY_TOKEN=${{ secrets.WHATSAPP_VERIFY_TOKEN }}" >> $GITHUB_ENV
+          echo "ALLOWED_EMAILS=${{ secrets.ALLOWED_EMAILS }}" >> $GITHUB_ENV
 
       # ── Services (fail-fast: each step must succeed before next runs) ───────
       - name: Deploy auth
