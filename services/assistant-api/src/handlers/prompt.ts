@@ -1,16 +1,8 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
-import { v4 as uuidv4 } from 'uuid';
 import { withObservability, logger, ok, created, noContent, badRequest, notFound, internalError } from '@ai-platform/shared';
-import { promptRepository } from '../repositories/prompt.repository';
-import type { IPrompt } from '@ai-platform/shared';
-
-/**
- * Extract {{variable}} patterns from prompt content
- */
-const extractVariables = (content: string): string[] => {
-  const matches = content.match(/\{\{(\w+)\}\}/g) || [];
-  return [...new Set(matches.map((m) => m.replace(/\{\{|\}\}/g, '')))];
-};
+import { createPromptUseCase } from '../use-cases/create-prompt.use-case';
+import { updatePromptUseCase } from '../use-cases/update-prompt.use-case';
+import { promptRepository } from '../repositories/impl/prompt.repository';
 
 const createPromptHandler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
   try {
@@ -24,25 +16,7 @@ const createPromptHandler = async (event: APIGatewayProxyEvent): Promise<APIGate
       return badRequest('name and content are required');
     }
 
-    const now = new Date().toISOString();
-    const prompt: IPrompt = {
-      assistantId,
-      promptId: uuidv4(),
-      name,
-      content,
-      version: 1,
-      variables: extractVariables(content),
-      isActive: true,
-      modelId,
-      maxOutputTokens,
-      temperature,
-      topP,
-      createdAt: now,
-      updatedAt: now,
-    };
-
-    await promptRepository.create(prompt);
-    logger.info('Prompt created', { promptId: prompt.promptId, assistantId });
+    const prompt = await createPromptUseCase.execute({ assistantId, name, content, modelId, maxOutputTokens, temperature, topP });
 
     return created(prompt);
   } catch (error) {
@@ -86,27 +60,12 @@ const updatePromptHandler = async (event: APIGatewayProxyEvent): Promise<APIGate
     const promptId = event.pathParameters?.promptId;
     if (!assistantId || !promptId) return badRequest('assistantId and promptId are required');
 
-    const existing = await promptRepository.get(assistantId, promptId);
-    if (!existing) return notFound('Prompt not found');
-
     const body = JSON.parse(event.body || '{}');
-    const now = new Date().toISOString();
+    const updated = await updatePromptUseCase.execute({ assistantId, promptId, updates: body });
 
-    // Create new version
-    const updatedPrompt: IPrompt = {
-      ...existing,
-      ...body,
-      assistantId,
-      promptId,
-      version: existing.version + 1,
-      variables: extractVariables(body.content || existing.content),
-      updatedAt: now,
-    };
+    if (!updated) return notFound('Prompt not found');
 
-    await promptRepository.create(updatedPrompt);
-    logger.info('Prompt updated', { promptId, assistantId, version: updatedPrompt.version });
-
-    return ok(updatedPrompt);
+    return ok(updated);
   } catch (error) {
     logger.error('Update prompt failed', { error });
     return internalError('Failed to update prompt');
@@ -134,4 +93,3 @@ export const listPrompts = withObservability(listPromptsHandler);
 export const getPrompt = withObservability(getPromptHandler);
 export const updatePrompt = withObservability(updatePromptHandler);
 export const deletePrompt = withObservability(deletePromptHandler);
-

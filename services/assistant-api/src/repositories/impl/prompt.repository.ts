@@ -1,8 +1,9 @@
 import { PutCommand, GetCommand, DeleteCommand, QueryCommand } from '@aws-sdk/lib-dynamodb';
 import { docClient, TABLE_NAME, keys } from '@ai-platform/shared';
 import type { IPrompt } from '@ai-platform/shared';
+import type { IPromptRepository } from '../interfaces/prompt.repository.interface';
 
-class PromptRepository {
+class PromptRepository implements IPromptRepository {
   async create(prompt: IPrompt): Promise<void> {
     const keyAttrs = keys.prompt(prompt.assistantId, prompt.promptId);
     const gsi1Keys = {
@@ -81,4 +82,3 @@ class PromptRepository {
 }
 
 export const promptRepository = new PromptRepository();
-

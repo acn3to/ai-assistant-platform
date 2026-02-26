@@ -1,8 +1,9 @@
 import { PutCommand, GetCommand, DeleteCommand, QueryCommand } from '@aws-sdk/lib-dynamodb';
 import { docClient, TABLE_NAME, keys } from '@ai-platform/shared';
 import type { IKBDocument } from '@ai-platform/shared';
+import type { IKBDocumentRepository } from '../interfaces/kb-document.repository.interface';
 
-class KBDocumentRepository {
+class KBDocumentRepository implements IKBDocumentRepository {
   async create(doc: IKBDocument): Promise<void> {
     const keyAttrs = keys.kbDocument(doc.assistantId, doc.filename);
 
@@ -59,4 +60,3 @@ class KBDocumentRepository {
 }
 
 export const kbDocumentRepository = new KBDocumentRepository();
-

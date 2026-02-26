@@ -1,8 +1,9 @@
 import { PutCommand, GetCommand, DeleteCommand, QueryCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
 import { docClient, TABLE_NAME, keys } from '@ai-platform/shared';
 import type { IAssistant } from '@ai-platform/shared';
+import type { IAssistantRepository } from '../interfaces/assistant.repository.interface';
 
-class AssistantRepository {
+class AssistantRepository implements IAssistantRepository {
   async create(assistant: IAssistant): Promise<void> {
     const keyAttrs = keys.assistant(assistant.tenantId, assistant.assistantId);
 
@@ -55,7 +56,7 @@ class AssistantRepository {
 
     const updateExpressions: string[] = ['#updatedAt = :updatedAt'];
     const expressionNames: Record<string, string> = { '#updatedAt': 'updatedAt' };
-    const expressionValues: Record<string, any> = { ':updatedAt': now };
+    const expressionValues: Record<string, unknown> = { ':updatedAt': now };
 
     const allowedFields = [
       'name', 'description', 'systemPrompt', 'modelId',
@@ -100,4 +101,3 @@ class AssistantRepository {
 }
 
 export const assistantRepository = new AssistantRepository();
-

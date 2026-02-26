@@ -1,8 +1,7 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
-import { v4 as uuidv4 } from 'uuid';
 import { withObservability, logger, ok, created, noContent, badRequest, notFound, internalError } from '@ai-platform/shared';
-import { assistantRepository } from '../repositories/assistant.repository';
-import type { IAssistant } from '@ai-platform/shared';
+import { createAssistantUseCase } from '../use-cases/create-assistant.use-case';
+import { assistantRepository } from '../repositories/impl/assistant.repository';
 
 const createAssistantHandler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
   try {
@@ -16,23 +15,7 @@ const createAssistantHandler = async (event: APIGatewayProxyEvent): Promise<APIG
       return badRequest('name, systemPrompt, and modelId are required');
     }
 
-    const now = new Date().toISOString();
-    const assistant: IAssistant = {
-      tenantId,
-      assistantId: uuidv4(),
-      name,
-      description: description || '',
-      systemPrompt,
-      modelId,
-      inferenceConfig: inferenceConfig || { maxTokens: 4096, temperature: 0.7, topP: 0.9 },
-      knowledgeBaseEnabled: false,
-      status: 'draft',
-      createdAt: now,
-      updatedAt: now,
-    };
-
-    await assistantRepository.create(assistant);
-    logger.info('Assistant created', { assistantId: assistant.assistantId, tenantId });
+    const assistant = await createAssistantUseCase.execute({ tenantId, name, description, systemPrompt, modelId, inferenceConfig });
 
     return created(assistant);
   } catch (error) {
@@ -108,4 +91,3 @@ export const listAssistants = withObservability(listAssistantsHandler);
 export const getAssistant = withObservability(getAssistantHandler);
 export const updateAssistant = withObservability(updateAssistantHandler);
 export const deleteAssistant = withObservability(deleteAssistantHandler);
-
