@@ -1,5 +1,5 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
-import { withObservability, logger, ok, created, badRequest, internalError, unauthorized } from '@ai-platform/shared';
+import { withObservability, logger, ok, created, badRequest, internalError, unauthorized, forbidden } from '@ai-platform/shared';
 import { signupUseCase } from '../use-cases/signup.use-case';
 import { loginUseCase } from '../use-cases/login.use-case';
 import { refreshTokenUseCase } from '../use-cases/refresh-token.use-case';
@@ -36,6 +36,9 @@ const signupHandler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPro
     return created(result);
   } catch (error: unknown) {
     logger.error('Signup failed', { error });
+    if (error instanceof Error && error.message === 'EmailNotAllowed') {
+      return forbidden('Registration is by invitation only');
+    }
     if (error instanceof Error && error.name === 'UsernameExistsException') {
       return badRequest('User already exists');
     }

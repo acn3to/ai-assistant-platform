@@ -34,6 +34,7 @@ provider:
     USER_POOL_CLIENT_ID: ${self:custom.userPoolClientId}
     ACCESS_CONTROL_ALLOW_ORIGIN: '*'
     SERVICE_NAME: ${self:service}
+    ALLOWED_EMAILS: ${env:ALLOWED_EMAILS, ''}
 
   iam:
     role:
