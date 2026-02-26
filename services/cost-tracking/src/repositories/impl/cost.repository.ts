@@ -1,18 +1,15 @@
-import { PutCommand, QueryCommand, GetCommand } from '@aws-sdk/lib-dynamodb';
+import { PutCommand, QueryCommand, GetCommand, ScanCommand } from '@aws-sdk/lib-dynamodb';
 import { docClient, TABLE_NAME, keys } from '@ai-platform/shared';
 import type { ICostEvent, IDailyRollup, IMonthlyRollup, IPricingConfig } from '@ai-platform/shared';
+import type { ICostRepository } from '../interfaces/cost.repository.interface';
 
-class CostRepository {
-  // Cost Events
+class CostRepository implements ICostRepository {
   async getCostEventsByConversation(conversationId: string): Promise<ICostEvent[]> {
     const result = await docClient.send(
       new QueryCommand({
         TableName: TABLE_NAME,
         KeyConditionExpression: 'PK = :pk AND begins_with(SK, :sk)',
-        ExpressionAttributeValues: {
-          ':pk': `CONV#${conversationId}`,
-          ':sk': 'COST#',
-        },
+        ExpressionAttributeValues: { ':pk': `CONV#${conversationId}`, ':sk': 'COST#' },
         ScanIndexForward: true,
       }),
     );
@@ -36,7 +33,31 @@ class CostRepository {
     return (result.Items as ICostEvent[]) || [];
   }
 
-  // Daily Rollups
+  async getActiveTenantIdsForDate(dateStr: string): Promise<Set<string>> {
+    const tenantIds = new Set<string>();
+    let lastEvaluatedKey: Record<string, unknown> | undefined;
+
+    do {
+      const result = await docClient.send(
+        new ScanCommand({
+          TableName: TABLE_NAME,
+          FilterExpression: 'entityType = :et AND begins_with(#ts, :datePrefix)',
+          ExpressionAttributeNames: { '#ts': 'timestamp' },
+          ExpressionAttributeValues: { ':et': 'CostEvent', ':datePrefix': dateStr },
+          ProjectionExpression: 'tenantId',
+          ExclusiveStartKey: lastEvaluatedKey,
+        }),
+      );
+
+      for (const item of result.Items || []) {
+        if (item.tenantId) tenantIds.add(item.tenantId as string);
+      }
+      lastEvaluatedKey = result.LastEvaluatedKey;
+    } while (lastEvaluatedKey);
+
+    return tenantIds;
+  }
+
   async putDailyRollup(rollup: IDailyRollup): Promise<void> {
     const keyAttrs = keys.dailyRollup(rollup.tenantId, rollup.date);
 
@@ -46,10 +67,7 @@ class CostRepository {
         Item: {
           ...keyAttrs,
           ...(rollup.assistantId
-            ? {
-                GSI1PK: `ASSISTANT#${rollup.assistantId}`,
-                GSI1SK: `ROLLUP#DAILY#${rollup.date}`,
-              }
+            ? { GSI1PK: `ASSISTANT#${rollup.assistantId}`, GSI1SK: `ROLLUP#DAILY#${rollup.date}` }
             : {}),
           ...rollup,
           entityType: 'DailyRollup',
@@ -74,18 +92,38 @@ class CostRepository {
     return (result.Items as IDailyRollup[]) || [];
   }
 
-  // Monthly Rollups
+  async getDailyRollupTenantIds(startDate: string, endDate: string): Promise<Set<string>> {
+    const tenantIds = new Set<string>();
+    let lastEvaluatedKey: Record<string, unknown> | undefined;
+
+    do {
+      const result = await docClient.send(
+        new ScanCommand({
+          TableName: TABLE_NAME,
+          FilterExpression: 'entityType = :et AND #d BETWEEN :start AND :end',
+          ExpressionAttributeNames: { '#d': 'date' },
+          ExpressionAttributeValues: { ':et': 'DailyRollup', ':start': startDate, ':end': endDate },
+          ProjectionExpression: 'tenantId',
+          ExclusiveStartKey: lastEvaluatedKey,
+        }),
+      );
+
+      for (const item of result.Items || []) {
+        if (item.tenantId) tenantIds.add(item.tenantId as string);
+      }
+      lastEvaluatedKey = result.LastEvaluatedKey;
+    } while (lastEvaluatedKey);
+
+    return tenantIds;
+  }
+
   async putMonthlyRollup(rollup: IMonthlyRollup): Promise<void> {
     const keyAttrs = keys.monthlyRollup(rollup.tenantId, rollup.month);
 
     await docClient.send(
       new PutCommand({
         TableName: TABLE_NAME,
-        Item: {
-          ...keyAttrs,
-          ...rollup,
-          entityType: 'MonthlyRollup',
-        },
+        Item: { ...keyAttrs, ...rollup, entityType: 'MonthlyRollup' },
       }),
     );
   }
@@ -106,30 +144,18 @@ class CostRepository {
     return (result.Items as IMonthlyRollup[]) || [];
   }
 
-  // Pricing Config
   async getPricing(modelId: string): Promise<IPricingConfig | null> {
-    const keyAttrs = keys.pricingConfig(modelId);
-
     const result = await docClient.send(
-      new GetCommand({
-        TableName: TABLE_NAME,
-        Key: keyAttrs,
-      }),
+      new GetCommand({ TableName: TABLE_NAME, Key: keys.pricingConfig(modelId) }),
     );
     return (result.Item as IPricingConfig) || null;
   }
 
   async putPricing(config: IPricingConfig): Promise<void> {
-    const keyAttrs = keys.pricingConfig(config.modelId);
-
     await docClient.send(
       new PutCommand({
         TableName: TABLE_NAME,
-        Item: {
-          ...keyAttrs,
-          ...config,
-          entityType: 'PricingConfig',
-        },
+        Item: { ...keys.pricingConfig(config.modelId), ...config, entityType: 'PricingConfig' },
       }),
     );
   }
@@ -139,10 +165,7 @@ class CostRepository {
       new QueryCommand({
         TableName: TABLE_NAME,
         KeyConditionExpression: 'PK = :pk AND begins_with(SK, :sk)',
-        ExpressionAttributeValues: {
-          ':pk': 'CONFIG',
-          ':sk': 'PRICING#',
-        },
+        ExpressionAttributeValues: { ':pk': 'CONFIG', ':sk': 'PRICING#' },
       }),
     );
     return (result.Items as IPricingConfig[]) || [];
@@ -150,4 +173,3 @@ class CostRepository {
 }
 
 export const costRepository = new CostRepository();
-
