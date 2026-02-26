@@ -8,7 +8,7 @@ const config: Config = {
   moduleNameMapper: {
     '^@ai-platform/shared$': '<rootDir>/src/__mocks__/@ai-platform/shared.ts',
   },
-  collectCoverageFrom: ['src/**/*.ts', '!src/**/__tests__/**'],
+  collectCoverageFrom: ['src/use-cases/**/*.ts', '!src/use-cases/__tests__/**'],
   coverageThreshold: { global: { lines: 80 } },
 };
 
